@@ -1,1 +1,136 @@
-# sien-app
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Блокнот Сень</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #1c1c1e; color: #ffffff; padding: 15px; margin: 0; }
+        h2 { color: #34c759; text-align: center; margin-top: 0; }
+        textarea { width: 100%; height: 80px; background: #2c2c2e; border: 1px solid #3a3a3c; border-radius: 8px; color: white; padding: 10px; box-sizing: border-box; resize: none; margin-bottom: 10px; }
+        select, input { width: 100%; padding: 10px; background: #2c2c2e; border: 1px solid #3a3a3c; border-radius: 8px; color: white; margin-bottom: 10px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #34c759; border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; font-size: 16px; margin-bottom: 10px; }
+        button:active { background: #30b351; }
+        .output-box { background: #2c2c2e; border-left: 4px solid #34c759; padding: 10px; border-radius: 0 8px 8px 0; min-height: 40px; word-break: break-all; user-select: all; }
+        label { font-size: 12px; color: #8e8e93; display: block; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+    <h2>Блокнот Языка «Сень»</h2>
+
+    <label>Исходный текст (Русский или Сень):</label>
+    <textarea id="inputText" placeholder="Введите текст для перевода или шифрования..."></textarea>
+
+    <label>Порог безопасности:</label>
+    <select id="secureLevel" onchange="toggleKeyInput()">
+        <option value="0">Без шифра (Чистая Сень)</option>
+        <option value="1">Порог 1: Сдвиг букв (+3)</option>
+        <option value="3">Порог 3: Одноразовый блокнот (Абсолют)</option>
+    </select>
+
+    <div id="keyContainer" style="display: none;">
+        <label>Секретный ключ (для Порога 3):</label>
+        <input type="password" id="secretKey" placeholder="Введите секретное слово...">
+    </div>
+
+    <button onclick="processText('toSen')">Перевести в СЕНЬ & Зашифровать</button>
+    <button onclick="processText('fromSen')" style="background: #007aff;">Расшифровать & В Русский</button>
+
+    <label>Результат:</label>
+    <div class="output-box" id="outputResult">Здесь появится результат...</div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        const dictionary = {
+            "я": "ми", "меня": "ми", "мой": "ми",
+            "ты": "ту", "тебя": "ту", "твой": "ту",
+            "он": "се", "она": "се", "оно": "се", "они": "се",
+            "хочу": "вол", "хотеть": "вол", "желать": "вол",
+            "делать": "да", "создавать": "да", "зарабатывать": "да",
+            "видеть": "ви", "знать": "ви", "понимать": "ви",
+            "говорить": "ток", "общаться": "ток", "язык": "ток",
+            "слово": "лог", "мысль": "лог",
+            "хорошо": "сон", "красиво": "сон", "правильно": "сон",
+            "нет": "нэ", "не": "нэ",
+            "вместе": "ком", "с": "ком",
+            "деньги": "кап", "капитал": "кап"
+        };
+
+        const reverseDictionary = {
+            "ми": "я", "ту": "ты", "се": "он", "вол": "хочу",
+            "да": "делать", "ви": "видеть", "ток": "говорить",
+            "лог": "слово", "сон": "хорошо", "нэ": "нет",
+            "ком": "вместе с", "кап": "деньги"
+        };
+
+        const alphabet = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя";
+
+        function toggleKeyInput() {
+            const level = document.getElementById('secureLevel').value;
+            document.getElementById('keyContainer').style.display = level === "3" ? "block" : "none";
+        }
+
+        function cipherCaesar(text, shift) {
+            return text.toLowerCase().split('').map(char => {
+                let idx = alphabet.indexOf(char);
+                if (idx === -1) return char;
+                let newIdx = (idx + shift + alphabet.length) % alphabet.length;
+                return alphabet[newIdx];
+            }).join('');
+        }
+
+        function cipherOTP(text, key, encrypt = true) {
+            if (!key) return "ОШИБКА: Нужен ключ!";
+            let result = "";
+            let keyIdx = 0;
+            text = text.toLowerCase();
+            key = key.toLowerCase();
+
+            for (let i = 0; i < text.length; i++) {
+                let char = text[i];
+                let idx = alphabet.indexOf(char);
+                if (idx === -1) {
+                    result += char;
+                    continue;
+                }
+                let kChar = key[keyIdx % key.length];
+                let kIdx = alphabet.indexOf(kChar);
+                if (kIdx === -1) kIdx = 1;
+
+                let newIdx = encrypt ? (idx + kIdx) % alphabet.length : (idx - kIdx + alphabet.length) % alphabet.length;
+                result += alphabet[newIdx];
+                keyIdx++;
+            }
+            return result;
+        }
+
+        function translateToSen(text) {
+            let words = text.toLowerCase().replace(/[^а-яё\s]/g, "").split(/\s+/);
+            let translated = words.map(word => dictionary[word] || `[${word}]`).join(' ');
+            return translated;
+        }
+
+        function translateFromSen(text) {
+            let words = text.toLowerCase().split(/\s+/);
+            return words.map(word => reverseDictionary[word] || word).join(' ');
+        }
+
+        function processText(direction) {
+            let input = document.getElementById('inputText').value.trim();
+            let level = document.getElementById('secureLevel').value;
+            let key = document.getElementById('secretKey').value.trim();
+            let result = "";
+
+            if (direction === 'toSen') {
+                let senText = translateToSen(input);
+                if (level === "0") result = senText;
+                else if (level === "1") result = cipherCaesar(senText, 3);
+                else if (level === "3") result = cipherOTP(senText, key, true);
+            } else {
+                let decryptedSen = input;
+                if (level ===# sien-app
